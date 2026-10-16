@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <title>Gerenciar Produtos</title>
+</head>
+<body>
+
+<div th:fragment="content">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0"><i class="bi bi-boxes me-2 text-primary"></i>Produtos</h2>
+    </div>
+
+    <div id="mensagem"></div>
+
+    <!-- Escrita de produtos: ADMIN e GERENTE (regra também aplicada no backend) -->
+    <div class="card shadow-sm mb-4" sec:authorize="hasAnyRole('ADMIN','GERENTE')">
+        <div class="card-body">
+            <h5 class="mb-3">Novo produto</h5>
+            <div class="row g-2">
+                <div class="col-md-4"><input id="nome" class="form-control" placeholder="Nome do produto"></div>
+                <div class="col-md-3">
+                    <select id="tipo" class="form-select">
+                        <option>Pizza</option><option>Lanche</option><option>Bebida</option>
+                        <option>Porção</option><option>Adicional</option>
+                    </select>
+                </div>
+                <div class="col-md-2"><input id="preco" type="number" step="0.01" min="0" class="form-control" placeholder="Preço (R$)"></div>
+                <div class="col-md-1 d-flex align-items-center">
+                    <div class="form-check"><input id="ativo" type="checkbox" class="form-check-input" checked>
+                        <label for="ativo" class="form-check-label">Ativo</label></div>
+                </div>
+                <div class="col-md-2"><button class="btn btn-success w-100" onclick="salvarProduto()">Salvar</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr><th class="ps-4">Nome</th><th>Tipo</th><th>Preço</th><th>Ativo</th>
+                        <th class="text-end pe-4" sec:authorize="hasAnyRole('ADMIN','GERENTE')">Ações</th></tr>
+                </thead>
+                <tbody id="produtos-tabela"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script th:inline="none">
+        (function () {
+            const tabela = document.getElementById('produtos-tabela');
+            const esc = s => String(s ?? '').replace(/[&<>"']/g,
+                c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+            const podeEscrever = !!document.getElementById('nome');
+
+            function mensagem(texto, tipo) {
+                document.getElementById('mensagem').innerHTML =
+                    '<div class="alert alert-' + tipo + ' alert-dismissible fade show">' + esc(texto) +
+                    '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
+            }
+
+            async function carregar() {
+                const resp = await fetch('/api/produtos');
+                const produtos = await resp.json();
+                tabela.innerHTML = produtos.map(p => '<tr><td class="ps-4">' + esc(p.nome) + '</td><td>' + esc(p.tipo) +
+                    '</td><td>' + Number(p.preco).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}) +
+                    '</td><td>' + (p.ativo === false ? 'Não' : 'Sim') + '</td>' +
+                    (podeEscrever ? '<td class="text-end pe-4"><button class="btn btn-sm btn-outline-danger" onclick="excluirProduto(\'' +
+                        esc(p.id) + '\')">Excluir</button></td>' : '') + '</tr>').join('') ||
+                    '<tr><td colspan="5" class="text-center text-muted py-5">Nenhum produto cadastrado.</td></tr>';
+            }
+
+            window.salvarProduto = async () => {
+                const resp = await fetch('/api/produtos', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        nome: document.getElementById('nome').value,
+                        tipo: document.getElementById('tipo').value,
+                        preco: parseFloat(document.getElementById('preco').value),
+                        ativo: document.getElementById('ativo').checked
+                    })
+                });
+                if (resp.ok) { document.getElementById('nome').value = ''; document.getElementById('preco').value = ''; mensagem('Produto salvo.', 'success'); }
+                else mensagem(resp.status === 403 ? 'Operação não autorizada para o seu perfil.' : 'Erro ao salvar o produto.', 'danger');
+                carregar();
+            };
+
+            window.excluirProduto = async id => {
+                if (!confirm('Tem certeza que deseja excluir este produto?')) return;
+                const resp = await fetch('/api/produtos/' + id, {method: 'DELETE'});
+                mensagem(resp.ok ? 'Produto excluído.' : 'Erro ao excluir o produto.', resp.ok ? 'success' : 'danger');
+                carregar();
+            };
+
+            carregar();
+        })();
+    </script>
+</div>
+
+</body>
+</html>

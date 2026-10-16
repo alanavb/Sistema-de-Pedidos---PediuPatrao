@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Lista de Pedidos</title>
+</head>
+<body>
+
+<div th:fragment="content" id="pedidos-app"
+     th:attr="data-gerente=${#authorization.expression('hasRole(''GERENTE'')')},
+              data-registra=${#authorization.expression('hasAnyRole(''ATENDENTE'',''GERENTE'')')}">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0">
+            <i class="bi bi-bag me-2 text-primary"></i>Pedidos
+        </h2>
+        <button class="btn btn-primary" id="btn-novo" style="display:none" onclick="abrirNovo()">
+            <i class="bi bi-plus-lg me-1"></i> Novo Pedido
+        </button>
+    </div>
+
+    <!-- Mensagens de feedback (preenchidas pelo JS) -->
+    <div id="mensagem"></div>
+
+    <!-- Novo pedido: o servidor calcula preços e total -->
+    <div class="card shadow-sm mb-4" id="form-novo" style="display:none">
+        <div class="card-body">
+            <h5 class="mb-3">Novo pedido</h5>
+            <div class="mb-3">
+                <label class="form-label fw-medium" for="novo-cliente">Cliente</label>
+                <select id="novo-cliente" class="form-select"></select>
+            </div>
+            <div id="novo-itens"></div>
+            <button class="btn btn-outline-secondary btn-sm mb-3" onclick="adicionarItem()">
+                <i class="bi bi-plus"></i> Adicionar item
+            </button>
+            <div class="d-flex gap-2">
+                <button class="btn btn-success" onclick="registrarPedido()">Registrar pedido</button>
+                <button class="btn btn-outline-secondary" onclick="fecharNovo()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th class="ps-4">Entrada</th>
+                        <th>Cliente</th>
+                        <th>Itens</th>
+                        <th>Subtotal</th>
+                        <th>Desc.</th>
+                        <th>Total</th>
+                        <th>Status</th>
+                        <th>Registro / Saída</th>
+                        <th class="text-end pe-4">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="pedidos-tabela"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const app = document.getElementById('pedidos-app');
+            const ehGerente = app.dataset.gerente === 'true';
+            const podeRegistrar = app.dataset.registra === 'true';
+            const tabela = document.getElementById('pedidos-tabela');
+            let clientes = {};
+            let produtos = [];
+
+            const PROXIMOS = {
+                RECEBIDO: [ ['EM_PREPARACAO', 'Enviar p/ cozinha'] ],
+                EM_PREPARACAO: [ ['PRONTO', 'Marcar pronto'] ],
+                PRONTO: [ ['SAIU_PARA_ENTREGA', 'Saiu p/ entrega'], ['RETIRADO', 'Retirado'] ],
+                SAIU_PARA_ENTREGA: [ ['FINALIZADO', 'Finalizar'] ],
+                RETIRADO: [ ['FINALIZADO', 'Finalizar'] ]
+            };
+            const ANTES_DA_SAIDA = ['RECEBIDO', 'EM_PREPARACAO', 'PRONTO'];
+            const COR = {FINALIZADO: 'bg-success', CANCELADO: 'bg-danger', EM_PREPARACAO: 'bg-warning text-dark',
+                PRONTO: 'bg-info text-dark', SAIU_PARA_ENTREGA: 'bg-primary', RETIRADO: 'bg-primary'};
+
+            const esc = s => String(s ?? '').replace(/[&<>"']/g,
+                c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+            const moeda = v => v == null ? '—' : Number(v).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+            const data = d => d ? new Date(d).toLocaleString('pt-BR') : '—';
+
+            function mensagem(texto, tipo) {
+                document.getElementById('mensagem').innerHTML =
+                    `<div class="alert alert-${tipo} alert-dismissible fade show">${esc(texto)}
+                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
+            }
+
+            async function chamar(url, options) {
+                const resp = await fetch(url, options);
+                const corpo = await resp.json().catch(() => ({}));
+                if (!resp.ok) {
+                    throw new Error(corpo.erro || (resp.status === 403 ? 'Operação não autorizada para o seu perfil.' : 'Erro ' + resp.status));
+                }
+                return corpo;
+            }
+
+            const formulario = params => ({
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: new URLSearchParams(params)
+            });
+
+            function acoes(p) {
+                if (!ehGerente) return '';
+                let html = '';
+                (PROXIMOS[p.status] || []).forEach(([novo, rotulo]) => {
+                    html += `<button class="btn btn-sm btn-outline-primary me-1 mb-1" onclick="mudarStatus('${esc(p.id)}','${novo}')">${rotulo}</button>`;
+                });
+                if (ANTES_DA_SAIDA.includes(p.status)) {
+                    html += `<button class="btn btn-sm btn-outline-success me-1 mb-1" onclick="aplicarDesconto('${esc(p.id)}')">Desconto</button>`;
+                    html += `<button class="btn btn-sm btn-outline-danger mb-1" onclick="cancelarPedido('${esc(p.id)}')">Cancelar</button>`;
+                }
+                return html;
+            }
+
+            function linha(p) {
+                const itens = (p.itens || []).map(i => `${i.quantidade}x ${esc(i.nomeProduto)}`).join('<br>') || '—';
+                const saida = p.dataSaida ? `<br><small>Saída: ${data(p.dataSaida)} por ${esc(p.responsavelSaida)}</small>` : '';
+                const cancelado = p.status === 'CANCELADO'
+                    ? `<br><small class="text-danger">Cancelado por ${esc(p.canceladoPor)}: ${esc(p.justificativaCancelamento)}</small>` : '';
+                return `<tr>
+                    <td class="ps-4">${data(p.dataEntrada)}</td>
+                    <td>${esc(clientes[p.clienteId] || p.clienteId)}</td>
+                    <td>${itens}</td>
+                    <td>${moeda(p.subtotal)}</td>
+                    <td>${p.descontoPercentual == null ? '—' : Number(p.descontoPercentual) + '%'}</td>
+                    <td><strong>${moeda(p.valorTotal)}</strong></td>
+                    <td><span class="badge ${COR[p.status] || 'bg-secondary'}">${esc(p.status)}</span></td>
+                    <td><small>Registro: ${esc(p.responsavelRegistro || '—')}</small>${saida}${cancelado}</td>
+                    <td class="text-end pe-4">${acoes(p)}</td></tr>`;
+            }
+
+            async function carregar() {
+                try {
+                    const pedidos = await chamar('/api/pedidos');
+                    tabela.innerHTML = pedidos.length
+                        ? pedidos.map(linha).join('')
+                        : '<tr><td colspan="9" class="text-center text-muted py-5">Nenhum pedido encontrado.</td></tr>';
+                } catch (e) {
+                    mensagem(e.message, 'danger');
+                }
+            }
+
+            window.mudarStatus = async (id, status) => {
+                try {
+                    await chamar(`/api/pedidos/${id}/status?status=${status}`, {method: 'PUT'});
+                    mensagem('Status atualizado.', 'success');
+                } catch (e) { mensagem(e.message, 'danger'); }
+                carregar();
+            };
+
+            window.aplicarDesconto = async id => {
+                const percentual = prompt('Desconto em % (máximo 20):');
+                if (percentual === null) return;
+                try {
+                    await chamar(`/api/pedidos/${id}/desconto`, formulario({percentual: percentual.replace(',', '.')}));
+                    mensagem('Desconto aplicado.', 'success');
+                } catch (e) { mensagem(e.message, 'danger'); }
+                carregar();
+            };
+
+            window.cancelarPedido = async id => {
+                const justificativa = prompt('Justificativa do cancelamento:');
+                if (justificativa === null) return;
+                try {
+                    await chamar(`/api/pedidos/${id}/cancelamento`, formulario({justificativa}));
+                    mensagem('Pedido cancelado.', 'success');
+                } catch (e) { mensagem(e.message, 'danger'); }
+                carregar();
+            };
+
+            // ---- Novo pedido ----
+            window.abrirNovo = async () => {
+                document.getElementById('form-novo').style.display = '';
+                document.getElementById('novo-itens').innerHTML = '';
+                adicionarItem();
+            };
+            window.fecharNovo = () => document.getElementById('form-novo').style.display = 'none';
+
+            window.adicionarItem = () => {
+                const opcoes = produtos.map(p => `<option value="${esc(p.id)}">${esc(p.nome)} — ${moeda(p.preco)}</option>`).join('');
+                const div = document.createElement('div');
+                div.className = 'row g-2 mb-2 item-novo';
+                div.innerHTML = `<div class="col-8"><select class="form-select produto">${opcoes}</select></div>
+                    <div class="col-4"><input type="number" min="1" value="1" class="form-control quantidade"></div>`;
+                document.getElementById('novo-itens').appendChild(div);
+            };
+
+            window.registrarPedido = async () => {
+                const itens = [...document.querySelectorAll('.item-novo')].map(d => ({
+                    produtoId: d.querySelector('.produto').value,
+                    quantidade: parseInt(d.querySelector('.quantidade').value, 10)
+                }));
+                try {
+                    await chamar('/api/pedidos', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({clienteId: document.getElementById('novo-cliente').value, itens})
+                    });
+                    fecharNovo();
+                    mensagem('Pedido registrado.', 'success');
+                } catch (e) { mensagem(e.message, 'danger'); }
+                carregar();
+            };
+
+            async function init() {
+                if (podeRegistrar) {
+                    document.getElementById('btn-novo').style.display = '';
+                }
+                // Clientes só são legíveis por ATENDENTE e GERENTE; para ADMIN o id é exibido
+                try {
+                    const lista = await chamar('/api/clientes');
+                    lista.forEach(c => clientes[c.id] = c.nome);
+                    document.getElementById('novo-cliente').innerHTML =
+                        lista.map(c => `<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join('');
+                } catch (e) { /* perfil sem acesso a clientes */ }
+                try {
+                    produtos = (await chamar('/api/produtos')).filter(p => p.ativo !== false);
+                } catch (e) { /* ignora */ }
+                carregar();
+            }
+            init();
+        })();
+    </script>
+</div>
+
+</body>
+</html>
