@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -61,12 +62,31 @@ public class AuditoriaService {
     /** Persiste o evento; não grava nada se nenhum campo mudou. Nunca passe senhas em antes/depois. */
     public void registrar(String operacao, String entidade, String entidadeId,
             Map<String, ?> antes, Map<String, ?> depois, String justificativa) {
-        List<Alteracao> alteracoes = diff(antes, depois);
+        registrar(operacao, entidade, entidadeId, antes, depois, justificativa, Map.of());
+    }
+
+    // Compara os valores reais e grava só a versão mascarada
+    // (trocar 9999-1234 por 8888-1234 continua gerando registro)
+    public void registrar(String operacao, String entidade, String entidadeId,
+            Map<String, ?> antes, Map<String, ?> depois, String justificativa,
+            Map<String, UnaryOperator<String>> mascaras) {
+        List<Alteracao> alteracoes = diff(antes, depois).stream()
+                .map(a -> mascarar(a, mascaras.get(a.campo())))
+                .toList();
         if (alteracoes.isEmpty()) {
             return;
         }
         auditoriaRepository.save(new AuditoriaEvento(null, usuarioAtual(), perfilAtual(),
                 LocalDateTime.now(), operacao, entidade, entidadeId, alteracoes, justificativa));
+    }
+
+    private static Alteracao mascarar(Alteracao a, UnaryOperator<String> mascara) {
+        if (mascara == null) {
+            return a;
+        }
+        return new Alteracao(a.campo(),
+                a.valorAnterior() == null ? null : mascara.apply(a.valorAnterior()),
+                a.valorNovo() == null ? null : mascara.apply(a.valorNovo()));
     }
 
     public List<AuditoriaEvento> listar() {

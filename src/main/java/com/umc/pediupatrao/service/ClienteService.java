@@ -4,13 +4,24 @@ import com.umc.pediupatrao.entity.Cliente;
 import com.umc.pediupatrao.repository.ClienteRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
 @Service
 public class ClienteService {
+
+    // Logradouro, bairro, cidade e estado ficam abertos: sem número e complemento não identificam o cliente
+    static final Map<String, UnaryOperator<String>> MASCARAS = Map.of(
+            "nome", MascaraDados::nome,
+            "telefone", MascaraDados::telefone,
+            "cep", MascaraDados::cep,
+            "numero", MascaraDados::oculto,
+            "complemento", MascaraDados::oculto,
+            "endereco", MascaraDados::digitos);
 
     @Autowired
     private ClienteRepository clienteRepository;
@@ -23,10 +34,11 @@ public class ClienteService {
     }
 
     // Método para excluir cliente
+    @Transactional
     public void excluir(String id) {
         clienteRepository.findById(id).ifPresent(existente -> {
             clienteRepository.deleteById(id);
-            auditoria.registrar("EXCLUSAO_CLIENTE", "Cliente", id, campos(existente), Map.of(), null);
+            auditoria.registrar("EXCLUSAO_CLIENTE", "Cliente", id, campos(existente), Map.of(), null, MASCARAS);
         });
     }
 
@@ -35,11 +47,12 @@ public class ClienteService {
     }
 
     // Método para salvar um novo cliente ou atualizar um cliente existente
+    @Transactional
     public Cliente salvar(Cliente cliente) {
         // Se o cliente não tem ID (novo cliente), salva como novo
         if (cliente.getId() == null) {
             Cliente salvo = clienteRepository.save(cliente);
-            auditoria.registrar("CRIACAO_CLIENTE", "Cliente", salvo.getId(), Map.of(), campos(salvo), null);
+            auditoria.registrar("CRIACAO_CLIENTE", "Cliente", salvo.getId(), Map.of(), campos(salvo), null, MASCARAS);
             return salvo;
         }
         // Se já tem ID (cliente existente), atualiza
@@ -47,7 +60,7 @@ public class ClienteService {
                 .orElseThrow(() -> new IllegalArgumentException("Cliente não encontrado para atualização."));
         Map<String, Object> antes = campos(anterior);
         Cliente salvo = clienteRepository.save(cliente);
-        auditoria.registrar("ALTERACAO_CLIENTE", "Cliente", salvo.getId(), antes, campos(salvo), null);
+        auditoria.registrar("ALTERACAO_CLIENTE", "Cliente", salvo.getId(), antes, campos(salvo), null, MASCARAS);
         return salvo;
     }
 
