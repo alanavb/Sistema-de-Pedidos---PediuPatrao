@@ -18,6 +18,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 
 @Configuration
@@ -82,12 +83,16 @@ public class SecurityConfig {
                         .anyRequest().hasAnyRole("ADMIN", "GERENTE", "ATENDENTE")
                 )
                 .exceptionHandling(ex -> ex.accessDeniedHandler((request, response, e) -> {
-                    log.warn("Acesso negado: usuario={} metodo={} uri={}",
+                    boolean csrf = e instanceof CsrfException;
+                    log.warn("Acesso negado{}: usuario={} metodo={} uri={}", csrf ? " (token CSRF)" : "",
                             AuditoriaService.usuarioAtual(), request.getMethod(), request.getRequestURI());
                     if (request.getRequestURI().startsWith("/api/")) {
+                        String erro = csrf
+                                ? "Token CSRF ausente ou inválido. Recarregue a página e tente novamente."
+                                : "Acesso negado: seu perfil não tem permissão para esta operação.";
                         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                         response.setContentType("application/json;charset=UTF-8");
-                        response.getWriter().write("{\"erro\":\"Acesso negado: seu perfil não tem permissão para esta operação.\"}");
+                        response.getWriter().write("{\"erro\":\"" + erro + "\"}");
                     } else {
                         response.sendError(HttpServletResponse.SC_FORBIDDEN); // página error.html
                     }
