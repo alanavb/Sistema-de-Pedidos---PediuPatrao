@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.umc.pediupatrao.config.SecurityConfig;
 import com.umc.pediupatrao.service.AuditoriaService;
 import com.umc.pediupatrao.service.ClienteService;
+import com.umc.pediupatrao.service.DashboardService;
 import com.umc.pediupatrao.service.PedidoService;
 import com.umc.pediupatrao.service.ProdutoService;
 import com.umc.pediupatrao.service.UsuarioDetailsService;
@@ -42,6 +43,7 @@ class AutorizacaoApiTest {
     @MockitoBean ProdutoService produtoService;
     @MockitoBean UsuarioService usuarioService;
     @MockitoBean AuditoriaService auditoriaService;
+    @MockitoBean DashboardService dashboardService;
 
     private static RequestPostProcessor perfil(String role) {
         return user(role.toLowerCase()).roles(role);

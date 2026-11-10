@@ -11,6 +11,16 @@ Requisitos: JDK 21, Maven (ou `mvnw`) e um MongoDB. Por padrão a aplicação us
 ./mvnw test                # testes das regras de pedidos
 ```
 
+### Dados de demonstração (dashboard)
+
+Para o dashboard ter o que mostrar, suba com o perfil `demo`:
+
+```bash
+./mvnw spring-boot:run "-Dspring-boot.run.profiles=demo"
+```
+
+Se o banco ainda não tiver nenhum pedido, são criados 14 produtos, 12 clientes (só quando não existem) e cerca de 1.500 pedidos dos últimos 120 dias, com mais movimento no jantar e nos fins de semana, alguns descontos e cancelamentos, e pedidos da última hora ainda em andamento. Com pedidos já cadastrados a carga não roda, para não misturar dados fictícios com reais. Os registros são gravados direto no banco e por isso não aparecem na auditoria. O número de dias pode ser alterado com `-Ddemo.dias=60`.
+
 ### MongoDB local em replica set
 
 Cada operação e o seu registro de auditoria são gravados na mesma transação, e o MongoDB só aceita transações em replica set. O Atlas já funciona assim; no MongoDB local é preciso ativar um replica set de um nó:
