@@ -64,8 +64,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/auditoria", "/api/auditoria").hasAnyRole("ADMIN", "GERENTE")
                         .requestMatchers("/auditoria/**", "/api/auditoria/**").denyAll()
                         // Dashboard: somente consulta, ADMIN e GERENTE
-                        .requestMatchers(HttpMethod.GET, "/api/dashboard/**").hasAnyRole("ADMIN", "GERENTE")
-                        .requestMatchers("/api/dashboard/**").denyAll()
+                        .requestMatchers(HttpMethod.GET, "/dashboard", "/api/dashboard/**").hasAnyRole("ADMIN", "GERENTE")
+                        .requestMatchers("/dashboard/**", "/api/dashboard/**").denyAll()
                         // Pedidos
                         .requestMatchers(HttpMethod.POST, "/api/pedidos").hasAnyRole("ATENDENTE", "GERENTE")
                         .requestMatchers(HttpMethod.PUT, "/api/pedidos/*/status").hasRole("GERENTE")
