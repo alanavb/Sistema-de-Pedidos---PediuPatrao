@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Dashboard</title>
+</head>
+<body>
+
+<div th:fragment="content" id="dashboard-app">
+
+    <style>
+        #dashboard-app { --pp-amarelo: #f5b700; --pp-escuro: #212529; }
+        #dashboard-app .cabecalho {
+            background: linear-gradient(120deg, var(--pp-escuro) 0%, #343a40 70%, #4a3f12 100%);
+            border-bottom: 4px solid var(--pp-amarelo);
+            border-radius: .75rem;
+            color: #fff;
+        }
+        #dashboard-app .cabecalho .logo { width: 72px; height: 72px; filter: drop-shadow(0 2px 6px rgba(0,0,0,.45)); }
+        #dashboard-app .cabecalho .marca { color: var(--pp-amarelo); font-weight: 800; letter-spacing: .12em; font-size: .8rem; text-transform: uppercase; }
+        #dashboard-app .cabecalho h2 { font-weight: 800; }
+        #dashboard-app .cabecalho .subtitulo { color: rgba(255,255,255,.7); }
+        #dashboard-app .cabecalho .btn-atualizar { border-color: var(--pp-amarelo); color: var(--pp-amarelo); }
+        #dashboard-app .cabecalho .btn-atualizar:hover { background: var(--pp-amarelo); color: var(--pp-escuro); }
+        #dashboard-app .cabecalho .form-check-input:checked { background-color: var(--pp-amarelo); border-color: var(--pp-amarelo); }
+
+        #dashboard-app .kpi { border-left: 4px solid var(--kpi-cor, #0d6efd); }
+        #dashboard-app .kpi .valor { font-size: 1.6rem; font-weight: 700; line-height: 1.2; }
+        #dashboard-app .kpi .rotulo { font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; color: #6c757d; }
+        #dashboard-app .grafico { position: relative; height: 280px; }
+        #dashboard-app .vazio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #6c757d; }
+        #dashboard-app.carregando .painel { opacity: .5; transition: opacity .2s; }
+        #dashboard-app .progress { height: .5rem; }
+        #dashboard-app .clicavel { cursor: pointer; }
+        #dashboard-app .status-linha { padding: .3rem .4rem; border-radius: .4rem; }
+        #dashboard-app .status-linha:hover { background: #f1f3f5; }
+        #dashboard-app .status-linha.esmaecido { opacity: .4; }
+        #dashboard-app .status-linha.selecionado { background: #fff8e1; outline: 1px solid var(--pp-amarelo); }
+        #dashboard-app #ranking tr.selecionado td { background: #fff8e1; font-weight: 600; }
+        #dashboard-app #ranking.com-selecao tr:not(.selecionado) td { opacity: .5; }
+        #dashboard-app .chip { background: #fff8e1; border: 1px solid var(--pp-amarelo); color: #5c4400; }
+        #dashboard-app .chip button { border: 0; background: none; color: inherit; padding: 0 0 0 .35rem; line-height: 1; }
+        #dashboard-app .dica { font-size: .8rem; color: #6c757d; }
+    </style>
+
+    <!-- Cabeçalho -->
+    <div class="cabecalho shadow-sm p-3 mb-3 d-flex flex-wrap align-items-center gap-3">
+        <div class="d-flex align-items-center gap-3 me-auto">
+            <img th:src="@{/images/logo.png}" src="/images/logo.png" alt="Pediu Patrão" class="logo flex-shrink-0">
+            <div>
+                <div class="marca">Pediu Patrão</div>
+                <h2 class="mb-0">Painel do Patrão</h2>
+                <div class="small subtitulo">
+                    Vendas e pedidos da pizzaria <span class="mx-1">·</span><span id="atualizado-em">carregando...</span>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-3 small">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" id="auto-atualizar" checked>
+                <label class="form-check-label" for="auto-atualizar">Atualizar a cada 60 s</label>
+            </div>
+            <button class="btn btn-sm btn-atualizar" id="btn-atualizar" type="button">
+                <i class="bi bi-arrow-clockwise"></i> Atualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros (RF05) -->
+    <form class="card shadow-sm mb-3" id="filtros" novalidate>
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-6 col-md-3 col-xl-2">
+                    <label class="form-label small fw-medium" for="f-inicio">De</label>
+                    <input type="date" class="form-control form-control-sm" id="f-inicio" required>
+                </div>
+                <div class="col-6 col-md-3 col-xl-2">
+                    <label class="form-label small fw-medium" for="f-fim">Até</label>
+                    <input type="date" class="form-control form-control-sm" id="f-fim" required>
+                </div>
+                <div class="col-12 col-md-6 col-xl-3">
+                    <span class="form-label small fw-medium d-block">Período rápido</span>
+                    <div class="btn-group btn-group-sm w-100" role="group" id="atalhos">
+                        <button type="button" class="btn btn-outline-secondary text-nowrap" data-dias="1">Hoje</button>
+                        <button type="button" class="btn btn-outline-secondary text-nowrap" data-dias="7">7 dias</button>
+                        <button type="button" class="btn btn-outline-secondary text-nowrap" data-dias="30">30 dias</button>
+                        <button type="button" class="btn btn-outline-secondary text-nowrap" data-dias="90">90 dias</button>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-xl-2">
+                    <label class="form-label small fw-medium" for="f-tipo">Tipo de produto</label>
+                    <select class="form-select form-select-sm" id="f-tipo">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-4 col-xl-3">
+                    <label class="form-label small fw-medium" for="f-produto">Produto</label>
+                    <select class="form-select form-select-sm" id="f-produto">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-4 col-xl-3">
+                    <span class="form-label small fw-medium d-block">Status</span>
+                    <div class="dropdown w-100">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start" type="button"
+                                id="f-status-botao" data-bs-toggle="dropdown" data-bs-auto-close="outside">Todos</button>
+                        <div class="dropdown-menu p-2 w-100" id="f-status"></div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-xl-2">
+                    <label class="form-label small fw-medium" for="f-hora">Horário</label>
+                    <select class="form-select form-select-sm" id="f-hora">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-12 col-xl-7 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-limpar">Limpar filtros</button>
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="bi bi-funnel"></i> Aplicar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- Filtros ativos -->
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <div id="chips" class="d-flex flex-wrap gap-2"></div>
+        <span class="dica"><i class="bi bi-hand-index me-1"></i>Clique nos gráficos e filtre o painel inteiro.</span>
+    </div>
+
+    <div id="mensagem"></div>
+
+    <!-- Indicadores (RF01) -->
+    <div class="row g-3 mb-3 painel">
+        <div class="col-6 col-xl-3">
+            <div class="card shadow-sm kpi h-100" style="--kpi-cor:#198754">
+                <div class="card-body">
+                    <div class="rotulo">Faturamento</div>
+                    <div class="valor" id="kpi-faturamento">—</div>
+                    <div class="small" id="kpi-variacao"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="card shadow-sm kpi h-100" style="--kpi-cor:#0d6efd">
+                <div class="card-body">
+                    <div class="rotulo">Pedidos</div>
+                    <div class="valor" id="kpi-pedidos">—</div>
+                    <div class="small text-muted" id="kpi-itens"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="card shadow-sm kpi h-100" style="--kpi-cor:#f5b700">
+                <div class="card-body">
+                    <div class="rotulo">Ticket médio</div>
+                    <div class="valor" id="kpi-ticket">—</div>
+                    <div class="small text-muted" id="kpi-descontos"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="card shadow-sm kpi h-100" style="--kpi-cor:#dc3545">
+                <div class="card-body">
+                    <div class="rotulo">Cancelamentos</div>
+                    <div class="valor" id="kpi-cancelados">—</div>
+                    <div class="small text-muted" id="kpi-taxa"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Análise de vendas (RF02) -->
+    <div class="row g-3 mb-3 painel">
+        <div class="col-12 col-xl-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold mb-0">Vendas no período
+                            <span class="dica fw-normal ms-1">clique numa barra para detalhar</span></h6>
+                        <div class="btn-group btn-group-sm" role="group" id="agrupamento">
+                            <button type="button" class="btn btn-outline-primary active" data-valor="DIA">Dia</button>
+                            <button type="button" class="btn btn-outline-primary" data-valor="SEMANA">Semana</button>
+                            <button type="button" class="btn btn-outline-primary" data-valor="MES">Mês</button>
+                        </div>
+                    </div>
+                    <div class="grafico"><canvas id="grafico-vendas"></canvas></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-2">Faturamento por tipo de produto</h6>
+                    <div class="grafico"><canvas id="grafico-tipos"></canvas></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-2">Pedidos por horário de entrada</h6>
+                    <div class="grafico"><canvas id="grafico-horas"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Situação dos pedidos (RF03) -->
+        <div class="col-12 col-xl-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">Situação dos pedidos</h6>
+                    <div class="d-flex gap-3 mb-3">
+                        <div class="flex-fill text-center border rounded py-2">
+                            <div class="fs-4 fw-bold text-warning" id="sit-andamento">—</div>
+                            <div class="small text-muted">em andamento</div>
+                        </div>
+                        <div class="flex-fill text-center border rounded py-2">
+                            <div class="fs-4 fw-bold" id="sit-tempo">—</div>
+                            <div class="small text-muted">tempo médio até a saída</div>
+                        </div>
+                    </div>
+                    <div id="sit-status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Produtos mais vendidos (RF04) -->
+    <div class="card shadow-sm mb-4 painel">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold mb-0">Produtos mais vendidos</h6>
+                <div class="btn-group btn-group-sm" role="group" id="criterio">
+                    <button type="button" class="btn btn-outline-primary active" data-valor="QUANTIDADE">Por quantidade</button>
+                    <button type="button" class="btn btn-outline-primary" data-valor="FATURAMENTO">Por faturamento</button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:3rem">#</th>
+                            <th>Produto</th>
+                            <th>Tipo</th>
+                            <th class="text-end">Quantidade</th>
+                            <th class="text-end">Faturamento</th>
+                            <th class="text-end">Pedidos</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ranking"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script th:src="@{/plugins/chart.js/Chart.min.js}"></script>
+    <script>
+        (function () {
+            const API = '/api/dashboard';
+            const INTERVALO_MS = 60000;
+            const STATUS = {
+                RECEBIDO: ['Recebido', '#0dcaf0'],
+                EM_PREPARACAO: ['Em preparação', '#fd7e14'],
+                PRONTO: ['Pronto', '#ffc107'],
+                SAIU_PARA_ENTREGA: ['Saiu para entrega', '#6610f2'],
+                RETIRADO: ['Retirado', '#6f42c1'],
+                FINALIZADO: ['Finalizado', '#198754'],
+                CANCELADO: ['Cancelado', '#dc3545']
+            };
+            const CORES_TIPO = ['#0d6efd', '#fd7e14', '#198754', '#6f42c1', '#dc3545', '#20c997', '#f5b700', '#6c757d'];
+
+            const app = document.getElementById('dashboard-app');
+            const el = id => document.getElementById(id);
+            const moeda = new Intl.NumberFormat('pt-BR', {style: 'currency', currency: 'BRL'});
+            const numero = new Intl.NumberFormat('pt-BR');
+            const esc = s => String(s ?? '').replace(/[&<>"']/g,
+                c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+            const comAlfa = (hex, a) => {
+                const n = parseInt(hex.slice(1), 16);
+                return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+            };
+
+            let opcoes = null;
+            let graficos = {};
+            let timer = null;
+            let agrupamento = 'DIA';
+            let criterio = 'QUANTIDADE';
+            // períodos anteriores a um detalhamento feito pelo gráfico de vendas
+            let historicoPeriodo = [];
+
+            // ---------- datas (sempre no fuso local, nunca via toISOString) ----------
+            function isoLocal(d) {
+                const p = n => String(n).padStart(2, '0');
+                return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+            }
+            function diasAtras(n) {
+                const d = new Date();
+                d.setDate(d.getDate() - n);
+                return isoLocal(d);
+            }
+            function deIso(iso) {
+                const [a, m, d] = iso.split('-').map(Number);
+                return new Date(a, m - 1, d || 1);
+            }
+            function dataBr(iso) {
+                const [a, m, d] = iso.split('-');
+                return d ? `${d}/${m}/${a}` : `${m}/${a}`;
+            }
+            function rotuloPeriodo(periodo) {
+                if (agrupamento === 'MES') {
+                    const [a, m] = periodo.split('-');
+                    return `${m}/${a}`;
+                }
+                const [, m, d] = periodo.split('-');
+                return agrupamento === 'SEMANA' ? `sem. ${d}/${m}` : `${d}/${m}`;
+            }
+            const hh = h => `${String(h).padStart(2, '0')}h`;
+
+            // ---------- estado dos filtros ----------
+            const filtro = {
+                get inicio() { return el('f-inicio').value; },
+                get fim() { return el('f-fim').value; },
+                get tipo() { return el('f-tipo').value; },
+                get produto() { return el('f-produto').value; },
+                get hora() { return el('f-hora').value; },
+                get status() { return [...el('f-status').querySelectorAll('input:checked')].map(i => i.value); }
+            };
+
+            // "sem" deixa de fora o filtro do próprio gráfico, para ele continuar mostrando
+            // todas as opções com a escolhida destacada
+            function parametros(sem) {
+                const p = new URLSearchParams();
+                p.set('dataInicio', filtro.inicio);
+                p.set('dataFim', filtro.fim);
+                if (sem !== 'status' && filtro.status.length) p.set('status', filtro.status.join(','));
+                if (sem !== 'tipo' && filtro.tipo) p.set('tipoProduto', filtro.tipo);
+                if (sem !== 'produto' && filtro.produto) p.set('produtoId', filtro.produto);
+                if (sem !== 'hora' && filtro.hora !== '') p.set('hora', filtro.hora);
+                return p;
+            }
+
+            // ---------- chamadas à API ----------
+            async function buscar(caminho, params) {
+                const qs = params ? '?' + params.toString() : '';
+                let resp;
+                try {
+                    resp = await fetch(API + caminho + qs, {headers: {'Accept': 'application/json'}});
+                } catch (e) {
+                    throw new Error('Não foi possível conectar ao servidor. Verifique se a aplicação está no ar.');
+                }
+                const tipo = resp.headers.get('content-type') || '';
+                if (resp.redirected || !tipo.includes('application/json')) {
+                    throw new Error('Sua sessão expirou. <a href="/login">Entre novamente</a>.');
+                }
+                const corpo = await resp.json();
+                if (!resp.ok) {
+                    throw new Error(esc(corpo.erro || `Erro ${resp.status} ao consultar o dashboard.`));
+                }
+                return corpo;
+            }
+
+            function mostrarErro(msg) {
+                el('mensagem').innerHTML =
+                    `<div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="bi bi-exclamation-triangle me-1"></i>${msg}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                     </div>`;
+            }
+
+            // ---------- carga principal ----------
+            async function carregar() {
+                if (!filtro.inicio || !filtro.fim) {
+                    mostrarErro('Informe as datas inicial e final.');
+                    return;
+                }
+                if (filtro.inicio > filtro.fim) {
+                    mostrarErro('A data inicial não pode ser posterior à data final.');
+                    return;
+                }
+                const p = parametros();
+                history.replaceState(null, '', '?' + p.toString());
+                desenharChips();
+                app.classList.add('carregando');
+                try {
+                    const pv = new URLSearchParams(p); pv.set('agrupamento', agrupamento);
+                    const pr = parametros('produto'); pr.set('criterio', criterio); pr.set('limite', '10');
+                    const [resumo, vendas, horas, tipos, situacao, ranking] = await Promise.all([
+                        buscar('/resumo', p),
+                        buscar('/vendas', pv),
+                        buscar('/vendas-por-hora', parametros('hora')),
+                        buscar('/vendas-por-tipo', parametros('tipo')),
+                        buscar('/situacao-pedidos', parametros('status')),
+                        buscar('/produtos-mais-vendidos', pr)
+                    ]);
+                    el('mensagem').innerHTML = '';
+                    desenharResumo(resumo);
+                    desenharVendas(vendas);
+                    desenharHoras(horas);
+                    desenharTipos(tipos);
+                    desenharSituacao(situacao);
+                    desenharRanking(ranking);
+                    const hora = new Date(resumo.atualizadoEm).toLocaleTimeString('pt-BR');
+                    el('atualizado-em').textContent =
+                        `${dataBr(resumo.dataInicio)} a ${dataBr(resumo.dataFim)} · atualizado às ${hora}`;
+                } catch (e) {
+                    mostrarErro(e.message);
+                } finally {
+                    app.classList.remove('carregando');
+                }
+            }
+
+            // ---------- interação entre os gráficos ----------
+            function alternarSelect(id, valor) {
+                el(id).value = el(id).value === String(valor) ? '' : String(valor);
+                carregar();
+            }
+
+            function alternarStatus(status) {
+                const caixas = [...el('f-status').querySelectorAll('input')];
+                const unicoMarcado = filtro.status.length === 1 && filtro.status[0] === status;
+                caixas.forEach(c => c.checked = !unicoMarcado && c.value === status);
+                rotuloStatus();
+                carregar();
+            }
+
+            function detalharPeriodo(periodo) {
+                historicoPeriodo.push({inicio: filtro.inicio, fim: filtro.fim, agrupamento});
+                let de, ate;
+                if (agrupamento === 'DIA') {
+                    de = ate = periodo;
+                } else if (agrupamento === 'SEMANA') {
+                    const fimSemana = deIso(periodo);
+                    fimSemana.setDate(fimSemana.getDate() + 6);
+                    de = periodo;
+                    ate = isoLocal(fimSemana);
+                } else {
+                    const [a, m] = periodo.split('-').map(Number);
+                    de = `${periodo}-01`;
+                    ate = isoLocal(new Date(a, m, 0));
+                }
+                // não sai do intervalo que estava sendo analisado
+                el('f-inicio').value = de < filtro.inicio ? filtro.inicio : de;
+                el('f-fim').value = ate > filtro.fim ? filtro.fim : ate;
+                definirAgrupamento('DIA');
+                carregar();
+            }
+
+            function voltarPeriodo() {
+                const anterior = historicoPeriodo.pop();
+                if (!anterior) return;
+                el('f-inicio').value = anterior.inicio;
+                el('f-fim').value = anterior.fim;
+                definirAgrupamento(anterior.agrupamento);
+                carregar();
+            }
+
+            function desenharChips() {
+                const chips = [];
+                const chip = (rotulo, acao) => chips.push(
+                    `<span class="chip badge rounded-pill fw-medium px-3 py-2">${rotulo}
+                        <button type="button" data-acao="${acao}" title="Remover filtro">&times;</button></span>`);
+                if (historicoPeriodo.length) {
+                    chip(`Período: ${filtro.inicio === filtro.fim ? dataBr(filtro.inicio)
+                        : dataBr(filtro.inicio) + ' a ' + dataBr(filtro.fim)}`, 'periodo');
+                }
+                if (filtro.tipo) chip(`Tipo: ${esc(filtro.tipo)}`, 'tipo');
+                if (filtro.produto) chip(`Produto: ${esc(nomeProduto(filtro.produto))}`, 'produto');
+                if (filtro.hora !== '') chip(`Horário: ${hh(filtro.hora)}`, 'hora');
+                filtro.status.forEach(s => chip(`Status: ${esc((STATUS[s] || [s])[0])}`, 'status:' + s));
+                if (chips.length > 1) {
+                    chips.push('<button type="button" class="btn btn-link btn-sm p-0" data-acao="tudo">limpar tudo</button>');
+                }
+                el('chips').innerHTML = chips.length
+                    ? '<span class="small fw-medium text-muted me-1">Filtrando por:</span>' + chips.join('') : '';
+            }
+
+            function removerChip(acao) {
+                if (acao === 'periodo') return voltarPeriodo();
+                if (acao === 'tudo') {
+                    historicoPeriodo = [];
+                    aplicarPadrao();
+                } else if (acao.startsWith('status:')) {
+                    const caixa = el('st-' + acao.slice(7));
+                    if (caixa) caixa.checked = false;
+                    rotuloStatus();
+                } else {
+                    el({tipo: 'f-tipo', produto: 'f-produto', hora: 'f-hora'}[acao]).value = '';
+                }
+                carregar();
+            }
+
+            function nomeProduto(id) {
+                const p = opcoes.produtos.find(x => x.id === id);
+                return p ? p.nome : 'produto selecionado';
+            }
+
+            // ---------- desenho ----------
+            function desenharResumo(r) {
+                el('kpi-faturamento').textContent = moeda.format(r.faturamento);
+                const v = r.variacaoFaturamento;
+                el('kpi-variacao').innerHTML = v === null
+                    ? '<span class="text-muted">sem vendas no período anterior</span>'
+                    : `<span class="${v >= 0 ? 'text-success' : 'text-danger'}">
+                           <i class="bi bi-arrow-${v >= 0 ? 'up' : 'down'}-right"></i> ${v.toLocaleString('pt-BR')}%
+                       </span> <span class="text-muted">vs. período anterior (${moeda.format(r.faturamentoPeriodoAnterior)})</span>`;
+                el('kpi-pedidos').textContent = numero.format(r.totalPedidos);
+                el('kpi-itens').textContent = `${numero.format(r.itensVendidos)} itens vendidos`;
+                el('kpi-ticket').textContent = moeda.format(r.ticketMedio);
+                el('kpi-descontos').textContent = `${moeda.format(r.descontosConcedidos)} em descontos`;
+                el('kpi-cancelados').textContent = numero.format(r.pedidosCancelados);
+                el('kpi-taxa').textContent = `${r.taxaCancelamento.toLocaleString('pt-BR')}% dos pedidos`;
+
+                if (r.registrosDesconsiderados > 0) {
+                    el('mensagem').innerHTML =
+                        `<div class="alert alert-warning small py-2">
+                            <i class="bi bi-info-circle me-1"></i>${r.registrosDesconsiderados} pedido(s) antigo(s),
+                            sem itens ou valores, não entraram nos indicadores.
+                         </div>`;
+                }
+            }
+
+            function grafico(id, config, vazio, aoClicar) {
+                const canvas = el(id);
+                const caixa = canvas.parentElement;
+                caixa.querySelector('.vazio')?.remove();
+                if (graficos[id]) graficos[id].destroy();
+                if (aoClicar) {
+                    config.options.onClick = (evt, elementos) => {
+                        if (elementos.length) aoClicar(elementos[0]._index);
+                    };
+                    const dica = config.options.tooltips || {};
+                    config.options.hover = {
+                        mode: dica.mode || 'nearest',
+                        intersect: dica.intersect !== false,
+                        onHover: (evt, elementos) => { canvas.style.cursor = elementos.length ? 'pointer' : 'default'; }
+                    };
+                }
+                graficos[id] = new Chart(canvas.getContext('2d'), config);
+                if (vazio) {
+                    caixa.insertAdjacentHTML('beforeend', '<div class="vazio">Sem vendas no período</div>');
+                }
+            }
+
+            const eixoMoeda = {ticks: {beginAtZero: true, callback: v => moeda.format(v)}};
+            const eixoInteiro = {ticks: {beginAtZero: true, precision: 0}};
+
+            function desenharVendas(serie) {
+                grafico('grafico-vendas', {
+                    type: 'bar',
+                    data: {
+                        labels: serie.map(p => rotuloPeriodo(p.periodo)),
+                        datasets: [
+                            {type: 'line', label: 'Faturamento', data: serie.map(p => p.faturamento),
+                             borderColor: '#198754', backgroundColor: 'rgba(25,135,84,.1)', fill: true,
+                             lineTension: 0.25, pointRadius: serie.length > 45 ? 0 : 3, yAxisID: 'valor'},
+                            {label: 'Pedidos', data: serie.map(p => p.pedidos),
+                             backgroundColor: 'rgba(13,110,253,.35)', hoverBackgroundColor: 'rgba(13,110,253,.7)',
+                             yAxisID: 'qtd'}
+                        ]
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        tooltips: {mode: 'index', intersect: false, callbacks: {
+                            label: (t, d) => d.datasets[t.datasetIndex].label + ': '
+                                + (t.datasetIndex === 0 ? moeda.format(t.yLabel) : numero.format(t.yLabel))
+                        }},
+                        scales: {
+                            yAxes: [Object.assign({id: 'valor', position: 'left'}, eixoMoeda),
+                                    Object.assign({id: 'qtd', position: 'right', gridLines: {display: false}}, eixoInteiro)],
+                            xAxes: [{gridLines: {display: false}, ticks: {autoSkip: true, maxTicksLimit: 15}}]
+                        }
+                    }
+                }, serie.every(p => p.pedidos === 0),
+                   // detalhar um único dia não tem mais para onde ir
+                   serie.length > 1 || agrupamento !== 'DIA' ? i => detalharPeriodo(serie[i].periodo) : null);
+            }
+
+            function desenharHoras(horas) {
+                const selecionada = filtro.hora === '' ? null : Number(filtro.hora);
+                const uteis = horas.filter(h => h.pedidos > 0 || h.hora === selecionada);
+                const de = uteis.length ? Math.min(...uteis.map(h => h.hora)) : 0;
+                const ate = uteis.length ? Math.max(...uteis.map(h => h.hora)) : 23;
+                const faixa = horas.filter(h => h.hora >= de && h.hora <= ate);
+                const pico = Math.max(0, ...faixa.map(h => h.pedidos));
+                const cor = h => {
+                    if (selecionada !== null) return h.hora === selecionada ? '#f5b700' : 'rgba(253,126,20,.2)';
+                    return h.pedidos === pico && pico > 0 ? '#fd7e14' : 'rgba(253,126,20,.45)';
+                };
+                grafico('grafico-horas', {
+                    type: 'bar',
+                    data: {
+                        labels: faixa.map(h => hh(h.hora)),
+                        datasets: [{label: 'Pedidos', data: faixa.map(h => h.pedidos),
+                            backgroundColor: faixa.map(cor), hoverBackgroundColor: '#f5b700'}]
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        legend: {display: false},
+                        tooltips: {callbacks: {
+                            label: t => `${numero.format(faixa[t.index].pedidos)} pedidos · ${moeda.format(faixa[t.index].faturamento)}`
+                        }},
+                        scales: {yAxes: [eixoInteiro], xAxes: [{gridLines: {display: false}}]}
+                    }
+                }, faixa.every(h => h.pedidos === 0), i => alternarSelect('f-hora', faixa[i].hora));
+            }
+
+            function desenharTipos(tipos) {
+                const selecionado = filtro.tipo.toLowerCase();
+                const cores = tipos.map((t, i) => {
+                    const base = CORES_TIPO[i % CORES_TIPO.length];
+                    return !selecionado || t.tipo.toLowerCase() === selecionado ? base : comAlfa(base, .2);
+                });
+                const escolher = i => alternarSelect('f-tipo', el('f-tipo').value.toLowerCase() === tipos[i].tipo.toLowerCase()
+                    ? el('f-tipo').value : tipos[i].tipo);
+                grafico('grafico-tipos', {
+                    type: 'doughnut',
+                    data: {
+                        labels: tipos.map(t => t.tipo),
+                        datasets: [{data: tipos.map(t => t.faturamento), backgroundColor: cores,
+                            borderWidth: tipos.map(t => t.tipo.toLowerCase() === selecionado ? 4 : 1)}]
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        cutoutPercentage: 60,
+                        legend: {position: 'bottom', onClick: (e, item) => escolher(item.index)},
+                        tooltips: {callbacks: {
+                            label: t => `${tipos[t.index].tipo}: ${moeda.format(tipos[t.index].faturamento)} `
+                                + `(${tipos[t.index].percentual.toLocaleString('pt-BR')}%) · ${numero.format(tipos[t.index].quantidade)} un.`
+                        }}
+                    }
+                }, tipos.length === 0, escolher);
+            }
+
+            function desenharSituacao(s) {
+                const marcados = filtro.status;
+                el('sit-andamento').textContent = numero.format(s.emAndamento);
+                el('sit-tempo').textContent = s.tempoMedioAteSaidaMinutos === null ? '—' : `${s.tempoMedioAteSaidaMinutos} min`;
+                el('sit-status').innerHTML = s.porStatus.map(q => {
+                    const [nome, cor] = STATUS[q.status] || [q.status, '#6c757d'];
+                    const classe = marcados.length === 0 ? '' : marcados.includes(q.status) ? 'selecionado' : 'esmaecido';
+                    return `<div class="status-linha clicavel mb-1 ${classe}" data-status="${q.status}" role="button"
+                                 title="Filtrar por ${esc(nome)}">
+                                <div class="d-flex justify-content-between small">
+                                    <span><i class="bi bi-circle-fill me-1" style="color:${cor}"></i>${esc(nome)}</span>
+                                    <span class="fw-medium">${numero.format(q.quantidade)}
+                                        <span class="text-muted">(${q.percentual.toLocaleString('pt-BR')}%)</span></span>
+                                </div>
+                                <div class="progress"><div class="progress-bar" style="width:${q.percentual}%;background:${cor}"></div></div>
+                            </div>`;
+                }).join('');
+            }
+
+            function desenharRanking(lista) {
+                const selecionado = filtro.produto;
+                el('ranking').classList.toggle('com-selecao', !!selecionado);
+                el('ranking').innerHTML = lista.length === 0
+                    ? '<tr><td colspan="6" class="text-center text-muted py-3">Sem vendas no período</td></tr>'
+                    : lista.map(p => `<tr class="clicavel ${p.produtoId === selecionado ? 'selecionado' : ''}"
+                                          data-produto="${esc(p.produtoId)}" title="Filtrar por ${esc(p.nome)}">
+                            <td class="fw-bold">${p.posicao}º</td>
+                            <td>${esc(p.nome)}</td>
+                            <td><span class="badge text-bg-light border">${esc(p.tipo)}</span></td>
+                            <td class="text-end">${numero.format(p.quantidade)}</td>
+                            <td class="text-end">${moeda.format(p.faturamento)}</td>
+                            <td class="text-end">${numero.format(p.pedidos)}</td>
+                        </tr>`).join('');
+            }
+
+            // ---------- formulário de filtros ----------
+            function montarFiltros() {
+                el('f-tipo').innerHTML = '<option value="">Todos</option>'
+                    + opcoes.tiposProduto.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+                el('f-produto').innerHTML = '<option value="">Todos</option>'
+                    + opcoes.produtos.map(p => `<option value="${esc(p.id)}">${esc(p.nome)}</option>`).join('');
+                el('f-hora').innerHTML = '<option value="">Todos</option>'
+                    + Array.from({length: 24}, (_, h) => `<option value="${h}">${hh(h)}</option>`).join('');
+                el('f-status').innerHTML = opcoes.status.map(s => `
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="${s}" id="st-${s}">
+                        <label class="form-check-label small" for="st-${s}">${esc((STATUS[s] || [s])[0])}</label>
+                    </div>`).join('');
+                el('f-status').addEventListener('change', rotuloStatus);
+            }
+
+            function rotuloStatus() {
+                const marcados = filtro.status;
+                el('f-status-botao').textContent = marcados.length === 0 ? 'Todos'
+                    : marcados.length === 1 ? (STATUS[marcados[0]] || [marcados[0]])[0]
+                    : `${marcados.length} selecionados`;
+            }
+
+            function aplicarPadrao() {
+                el('f-fim').value = isoLocal(new Date());
+                el('f-inicio').value = diasAtras(opcoes.periodoPadraoDias - 1);
+                ['f-tipo', 'f-produto', 'f-hora'].forEach(id => el(id).value = '');
+                el('f-status').querySelectorAll('input').forEach(i => i.checked = false);
+                rotuloStatus();
+            }
+
+            // Filtros vindos da URL permitem compartilhar ou recarregar a mesma visão
+            function lerUrl() {
+                const q = new URLSearchParams(location.search);
+                if (q.get('dataInicio')) el('f-inicio').value = q.get('dataInicio');
+                if (q.get('dataFim')) el('f-fim').value = q.get('dataFim');
+                if (q.get('tipoProduto')) el('f-tipo').value = q.get('tipoProduto');
+                if (q.get('produtoId')) el('f-produto').value = q.get('produtoId');
+                if (q.get('hora')) el('f-hora').value = q.get('hora');
+                (q.get('status') || '').split(',').filter(Boolean).forEach(s => {
+                    const caixa = el('st-' + s);
+                    if (caixa) caixa.checked = true;
+                });
+                rotuloStatus();
+            }
+
+            function definirAgrupamento(valor) {
+                agrupamento = valor;
+                el('agrupamento').querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.valor === valor));
+            }
+
+            function agendar() {
+                clearInterval(timer);
+                if (el('auto-atualizar').checked) {
+                    timer = setInterval(() => { if (!document.hidden) carregar(); }, INTERVALO_MS);
+                }
+            }
+
+            // ---------- eventos ----------
+            el('filtros').addEventListener('submit', e => { e.preventDefault(); historicoPeriodo = []; carregar(); });
+            ['f-tipo', 'f-produto', 'f-hora'].forEach(id => el(id).addEventListener('change', carregar));
+            el('btn-atualizar').addEventListener('click', carregar);
+            el('btn-limpar').addEventListener('click', () => { historicoPeriodo = []; aplicarPadrao(); carregar(); });
+            el('auto-atualizar').addEventListener('change', agendar);
+            el('atalhos').addEventListener('click', e => {
+                const dias = e.target.dataset.dias;
+                if (!dias) return;
+                historicoPeriodo = [];
+                el('f-fim').value = isoLocal(new Date());
+                el('f-inicio').value = diasAtras(Number(dias) - 1);
+                carregar();
+            });
+            el('agrupamento').addEventListener('click', e => {
+                const botao = e.target.closest('button[data-valor]');
+                if (!botao) return;
+                definirAgrupamento(botao.dataset.valor);
+                carregar();
+            });
+            el('criterio').addEventListener('click', e => {
+                const botao = e.target.closest('button[data-valor]');
+                if (!botao) return;
+                el('criterio').querySelectorAll('button').forEach(b => b.classList.toggle('active', b === botao));
+                criterio = botao.dataset.valor;
+                carregar();
+            });
+            el('sit-status').addEventListener('click', e => {
+                const linha = e.target.closest('[data-status]');
+                if (linha) alternarStatus(linha.dataset.status);
+            });
+            el('ranking').addEventListener('click', e => {
+                const linha = e.target.closest('tr[data-produto]');
+                if (linha) alternarSelect('f-produto', linha.dataset.produto);
+            });
+            el('chips').addEventListener('click', e => {
+                const botao = e.target.closest('button[data-acao]');
+                if (botao) removerChip(botao.dataset.acao);
+            });
+
+            (async function iniciar() {
+                try {
+                    opcoes = await buscar('/filtros');
+                } catch (e) {
+                    mostrarErro(e.message);
+                    el('atualizado-em').textContent = '';
+                    return;
+                }
+                montarFiltros();
+                aplicarPadrao();
+                lerUrl();
+                await carregar();
+                agendar();
+            })();
+        })();
+    </script>
+</div>
+
+</body>
+</html>

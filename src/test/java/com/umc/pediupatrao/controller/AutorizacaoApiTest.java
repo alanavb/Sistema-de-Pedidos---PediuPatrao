@@ -1,6 +1,7 @@
 package com.umc.pediupatrao.controller;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -14,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.umc.pediupatrao.config.SecurityConfig;
 import com.umc.pediupatrao.service.AuditoriaService;
 import com.umc.pediupatrao.service.ClienteService;
+import com.umc.pediupatrao.service.DashboardService;
 import com.umc.pediupatrao.service.PedidoService;
 import com.umc.pediupatrao.service.ProdutoService;
 import com.umc.pediupatrao.service.UsuarioDetailsService;
@@ -42,6 +44,7 @@ class AutorizacaoApiTest {
     @MockitoBean ProdutoService produtoService;
     @MockitoBean UsuarioService usuarioService;
     @MockitoBean AuditoriaService auditoriaService;
+    @MockitoBean DashboardService dashboardService;
 
     private static RequestPostProcessor perfil(String role) {
         return user(role.toLowerCase()).roles(role);
@@ -190,6 +193,26 @@ class AutorizacaoApiTest {
     @Test
     void atendenteAlteraCliente() throws Exception {
         esperaPermitido(json(put("/api/clientes/c1"), "{\"nome\":\"Ana\"}"), "ATENDENTE");
+    }
+
+    // Dashboard: tela e menu só para ADMIN e GERENTE
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "GERENTE"})
+    void adminEGerenteAbremODashboard(String role) throws Exception {
+        mvc.perform(get("/dashboard").with(perfil(role)))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"dashboard-app\"")))
+                .andExpect(content().string(containsString("href=\"/dashboard\"")));
+    }
+
+    @Test
+    void atendenteNaoAbreODashboardNemVeOItemNoMenu() throws Exception {
+        mvc.perform(get("/dashboard").with(perfil("ATENDENTE")))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/pedidos").with(perfil("ATENDENTE")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("href=\"/dashboard\""))));
     }
 
     // CSRF

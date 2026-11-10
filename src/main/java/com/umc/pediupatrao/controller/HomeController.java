@@ -132,6 +132,15 @@ public class HomeController {
     }
 
     // ========================
+    // DASHBOARD (dados carregados por /api/dashboard/*)
+    // ========================
+    @GetMapping("/dashboard")
+    public String dashboard(Model model) {
+        model.addAttribute("content", "dashboard :: content");
+        return "layout";
+    }
+
+    // ========================
     // AUDITORIA (dados carregados por /api/auditoria)
     // ========================
     @GetMapping("/auditoria")
