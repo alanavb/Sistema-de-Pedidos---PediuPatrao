@@ -4,6 +4,7 @@ Sistema de pedidos da pizzaria (Java 21, Spring Boot 3.4, Spring Security, Mongo
 
 - **Parte 1:** perfis de acesso, regras de pedidos, descontos, cancelamentos e auditoria (seções abaixo).
 - **Parte 2:** dashboard administrativo com API própria. Documentação completa (requisitos funcionais e não funcionais, decisões de projeto, endpoints e evidências de testes) em [docs/documentacao-dashboard.md](docs/documentacao-dashboard.md).
+- **Vídeo de demonstração da Parte 2:** [baixar/assistir (MP4, 95,8 MB)](https://github.com/alanavb/Sistema-de-Pedidos---PediuPatrao/releases/download/v2.0/VideoDemonstrativoParte2_AlanaBarbosa.mp4) · [release v2.0](https://github.com/alanavb/Sistema-de-Pedidos---PediuPatrao/releases/tag/v2.0)
 
 ![Dashboard administrativo](docs/img/dashboard-geral.png)
 
