@@ -4,6 +4,7 @@ import com.umc.pediupatrao.dto.dashboard.Agrupamento;
 import com.umc.pediupatrao.dto.dashboard.CriterioRanking;
 import com.umc.pediupatrao.dto.dashboard.FiltroDashboard;
 import com.umc.pediupatrao.dto.dashboard.OpcoesFiltro;
+import com.umc.pediupatrao.dto.dashboard.OpcoesFiltro.ProdutoOpcao;
 import com.umc.pediupatrao.dto.dashboard.PontoVenda;
 import com.umc.pediupatrao.dto.dashboard.ProdutoVendido;
 import com.umc.pediupatrao.dto.dashboard.ResumoVendas;
@@ -184,9 +185,15 @@ public class DashboardService {
     public OpcoesFiltro opcoes() {
         Set<String> tipos = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
         tiposPorProduto().values().stream().filter(t -> !SEM_TIPO.equals(t)).forEach(tipos::add);
+        List<ProdutoOpcao> produtos = produtoRepository.findAll().stream()
+                .filter(p -> p.getId() != null && p.getNome() != null)
+                .map(p -> new ProdutoOpcao(p.getId(), p.getNome(), p.getTipo()))
+                .sorted(Comparator.comparing(ProdutoOpcao::nome, String.CASE_INSENSITIVE_ORDER))
+                .toList();
         return new OpcoesFiltro(
                 Arrays.stream(StatusPedido.values()).map(Enum::name).toList(),
                 List.copyOf(tipos),
+                produtos,
                 Arrays.stream(Agrupamento.values()).map(Enum::name).toList(),
                 Arrays.stream(CriterioRanking.values()).map(Enum::name).toList(),
                 dataDoPedido(Sort.Direction.ASC),
@@ -217,16 +224,20 @@ public class DashboardService {
                 desconsiderados++;
                 continue;
             }
+            if (filtro.hora() != null && pedido.getDataEntrada().getHour() != filtro.hora()) {
+                continue;
+            }
             List<ItemVendido> itens = pedido.getItens().stream()
                     .map(i -> new ItemVendido(i, tipos.getOrDefault(i.produtoId(), SEM_TIPO),
                             liquido(i.subtotal(), pedido.getDescontoPercentual())))
                     .filter(i -> tipoFiltro == null || tipoFiltro.equalsIgnoreCase(i.tipo()))
+                    .filter(i -> filtro.produtoId() == null || filtro.produtoId().equals(i.item().produtoId()))
                     .toList();
             if (itens.isEmpty()) {
                 continue;
             }
-            BigDecimal valor = tipoFiltro == null ? pedido.getValorTotal() : somarItens(itens, ItemVendido::valorLiquido);
-            BigDecimal bruto = tipoFiltro == null
+            BigDecimal valor = !filtro.filtraItens() ? pedido.getValorTotal() : somarItens(itens, ItemVendido::valorLiquido);
+            BigDecimal bruto = !filtro.filtraItens()
                     ? Objects.requireNonNullElse(pedido.getSubtotal(), pedido.getValorTotal())
                     : somarItens(itens, i -> i.item().subtotal());
             vendas.add(new Venda(pedido, itens, valor.setScale(2, RoundingMode.HALF_UP),

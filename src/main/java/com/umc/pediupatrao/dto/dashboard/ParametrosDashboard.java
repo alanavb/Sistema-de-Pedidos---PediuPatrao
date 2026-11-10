@@ -10,9 +10,11 @@ public record ParametrosDashboard(
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicio,
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFim,
         List<StatusPedido> status,
-        String tipoProduto) {
+        String tipoProduto,
+        Integer hora,
+        String produtoId) {
 
     public FiltroDashboard paraFiltro(LocalDate hoje) {
-        return FiltroDashboard.criar(dataInicio, dataFim, status, tipoProduto, hoje);
+        return FiltroDashboard.criar(dataInicio, dataFim, status, tipoProduto, hora, produtoId, hoje);
     }
 }

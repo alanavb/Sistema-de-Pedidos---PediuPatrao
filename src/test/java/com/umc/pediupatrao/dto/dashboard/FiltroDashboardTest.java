@@ -47,6 +47,22 @@ class FiltroDashboardTest {
     }
 
     @Test
+    void horaPrecisaEstarEntre0e23() {
+        assertEquals(0, FiltroDashboard.criar(null, null, null, null, 0, null, HOJE).hora());
+        assertEquals(23, FiltroDashboard.criar(null, null, null, null, 23, null, HOJE).hora());
+        assertThrows(IllegalArgumentException.class, () -> FiltroDashboard.criar(null, null, null, null, 24, null, HOJE));
+        assertThrows(IllegalArgumentException.class, () -> FiltroDashboard.criar(null, null, null, null, -1, null, HOJE));
+    }
+
+    @Test
+    void periodoAnteriorMantemHoraEProduto() {
+        FiltroDashboard f = FiltroDashboard.criar(null, null, null, null, 20, "p1", HOJE).periodoAnterior();
+        assertEquals(20, f.hora());
+        assertEquals("p1", f.produtoId());
+        assertTrue(f.filtraItens());
+    }
+
+    @Test
     void periodoAnteriorTemOMesmoTamanho() {
         FiltroDashboard f = FiltroDashboard.criar(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 7),
                 List.of(StatusPedido.FINALIZADO), "Pizza", HOJE);

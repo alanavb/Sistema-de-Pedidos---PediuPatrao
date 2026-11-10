@@ -118,6 +118,28 @@ class DashboardControllerTest {
     }
 
     @Test
+    void horaEProdutoSaoRepassadosAoServico() throws Exception {
+        mvc.perform(get("/api/dashboard/vendas-por-tipo").with(gerente())
+                        .param("hora", "19").param("produtoId", "p1"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<FiltroDashboard> captor = ArgumentCaptor.forClass(FiltroDashboard.class);
+        verify(dashboardService).vendasPorTipo(captor.capture());
+        assertEquals(19, captor.getValue().hora());
+        assertEquals("p1", captor.getValue().produtoId());
+    }
+
+    @Test
+    void horaForaDoDiaRetorna400() throws Exception {
+        mvc.perform(get("/api/dashboard/resumo").with(gerente()).param("hora", "24"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erro").value("A hora deve estar entre 0 e 23."));
+        mvc.perform(get("/api/dashboard/resumo").with(gerente()).param("hora", "noite"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erro").value(containsString("hora")));
+    }
+
+    @Test
     void agrupamentoECriterioTemValorPadrao() throws Exception {
         when(dashboardService.vendasNoTempo(any(), eq(Agrupamento.DIA)))
                 .thenReturn(List.of(new PontoVenda("2026-11-01", 1, new BigDecimal("120.00"))));

@@ -182,6 +182,36 @@ class DashboardServiceTest {
     }
 
     @Test
+    void filtroPorHoraConsideraSoPedidosQueEntraramNaquelaHora() {
+        FiltroDashboard f = FiltroDashboard.criar(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 7),
+                null, null, 19, null, HOJE);
+        ResumoVendas r = service.resumo(f);
+
+        assertEquals(2, r.totalPedidos());
+        assertEquals(1, r.pedidosCancelados());
+        assertEquals(bd("120.00"), r.faturamento());
+    }
+
+    @Test
+    void filtroPorProdutoConsideraSoOsItensDoProduto() {
+        FiltroDashboard f = FiltroDashboard.criar(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 7),
+                null, null, null, "p2", HOJE);
+        ResumoVendas r = service.resumo(f);
+
+        assertEquals(2, r.totalPedidos());
+        assertEquals(bd("30.00"), r.faturamento());
+        assertEquals(3, r.itensVendidos());
+    }
+
+    @Test
+    void filtrosCombinadosDeTipoEHora() {
+        FiltroDashboard f = FiltroDashboard.criar(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 7),
+                null, "Pizza", 20, null, HOJE);
+
+        assertEquals(List.of(new VendaPorTipo("Pizza", 1, bd("45.00"), bd("100.0"))), service.vendasPorTipo(f));
+    }
+
+    @Test
     void tipoInexistenteERecusado() {
         assertThrows(IllegalArgumentException.class, () -> service.resumo(filtro("Sushi")));
     }
@@ -290,5 +320,7 @@ class DashboardServiceTest {
         assertEquals(StatusPedido.values().length, opcoes.status().size());
         assertEquals(LocalDate.of(2026, 11, 1), opcoes.primeiroPedido());
         assertEquals(List.of("DIA", "SEMANA", "MES"), opcoes.agrupamentos());
+        assertEquals(List.of("Coca-Cola", "Esfiha de Carne", "Pizza Calabresa"),
+                opcoes.produtos().stream().map(OpcoesFiltro.ProdutoOpcao::nome).toList());
     }
 }
