@@ -5,6 +5,7 @@ import com.umc.pediupatrao.entity.Usuario;
 import com.umc.pediupatrao.repository.UsuarioRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -36,6 +37,7 @@ public class UsuarioService {
     }
 
     // Salva um novo usuário (criptografando a senha)
+    @Transactional
     public Usuario salvarUsuario(Usuario usuario) {
         validar(usuario);
         if (usuario.getPassword() == null || usuario.getPassword().isBlank()) {
@@ -52,6 +54,7 @@ public class UsuarioService {
     }
 
     // Deleta um usuário pelo ID
+    @Transactional
     public void deletarUsuario(String id) {
         usuarioRepository.findById(id).ifPresent(existente -> {
             if (existente.getUsername().equals(AuditoriaService.usuarioAtual())) {
@@ -71,6 +74,7 @@ public class UsuarioService {
     }
 
     // Atualiza o usuário
+    @Transactional
     public Usuario atualizarUsuario(String id, Usuario usuarioAtualizado) {
         Usuario existente = usuarioRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));

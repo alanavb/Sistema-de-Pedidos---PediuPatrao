@@ -11,6 +11,20 @@ Requisitos: JDK 21, Maven (ou `mvnw`) e um MongoDB. Por padrão a aplicação us
 ./mvnw test                # testes das regras de pedidos
 ```
 
+### MongoDB local em replica set
+
+Cada operação e o seu registro de auditoria são gravados na mesma transação, e o MongoDB só aceita transações em replica set. O Atlas já funciona assim; no MongoDB local é preciso ativar um replica set de um nó:
+
+1. No `mongod.cfg`, troque `#replication:` por:
+   ```yaml
+   replication:
+     replSetName: rs0
+   ```
+2. Reinicie o serviço `MongoDB`.
+3. No `mongosh`, rode uma única vez: `rs.initiate({_id: "rs0", members: [{_id: 0, host: "127.0.0.1:27017"}]})`
+
+Os testes de `TransacaoAuditoriaTest` simulam falha na gravação da auditoria e conferem que a operação foi desfeita; sem replica set eles são ignorados.
+
 Na primeira execução são criados (se não existirem) três usuários de demonstração. 
 
 | Usuário | Senha | Perfil |

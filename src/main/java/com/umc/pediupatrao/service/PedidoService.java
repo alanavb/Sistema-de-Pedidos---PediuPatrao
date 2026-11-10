@@ -18,6 +18,7 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class PedidoService {
@@ -37,6 +38,7 @@ public class PedidoService {
     @Autowired
     private AuditoriaService auditoria;
 
+    @Transactional
     public Pedido criarPedido(PedidoRequest request) {
         if (request == null || request.clienteId() == null
                 || !clienteRepository.existsById(request.clienteId())) {
@@ -83,6 +85,7 @@ public class PedidoService {
     }
 
     /** Avança o pedido no fluxo normal; cancelamento tem operação própria. */
+    @Transactional
     public Pedido atualizarStatus(String id, String status) {
         StatusPedido novo;
         try {
@@ -115,6 +118,7 @@ public class PedidoService {
     }
 
     @PreAuthorize("hasRole('GERENTE')")
+    @Transactional
     public Pedido aplicarDesconto(String id, BigDecimal percentual) {
         if (percentual == null || percentual.signum() <= 0 || percentual.compareTo(DESCONTO_MAXIMO) > 0) {
             throw new IllegalArgumentException("O desconto deve ser maior que 0% e no máximo 20%.");
@@ -138,6 +142,7 @@ public class PedidoService {
     }
 
     @PreAuthorize("hasRole('GERENTE')")
+    @Transactional
     public Pedido cancelar(String id, String justificativa) {
         if (justificativa == null || justificativa.isBlank()) {
             throw new IllegalArgumentException("A justificativa do cancelamento é obrigatória.");

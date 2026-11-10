@@ -4,6 +4,7 @@ import com.umc.pediupatrao.entity.Cliente;
 import com.umc.pediupatrao.repository.ClienteRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,7 @@ public class ClienteService {
     }
 
     // Método para excluir cliente
+    @Transactional
     public void excluir(String id) {
         clienteRepository.findById(id).ifPresent(existente -> {
             clienteRepository.deleteById(id);
@@ -45,6 +47,7 @@ public class ClienteService {
     }
 
     // Método para salvar um novo cliente ou atualizar um cliente existente
+    @Transactional
     public Cliente salvar(Cliente cliente) {
         // Se o cliente não tem ID (novo cliente), salva como novo
         if (cliente.getId() == null) {
