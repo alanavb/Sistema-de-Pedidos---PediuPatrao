@@ -57,6 +57,9 @@ public class UsuarioService {
             if (existente.getUsername().equals(AuditoriaService.usuarioAtual())) {
                 throw new IllegalStateException("Você não pode excluir o próprio usuário.");
             }
+            if (ehUltimoAdmin(existente)) {
+                throw new IllegalStateException("Não é possível excluir o último administrador do sistema.");
+            }
             usuarioRepository.deleteById(id);
             auditoria.registrar("EXCLUSAO_USUARIO", "Usuario", id, campos(existente), Map.of(), null);
         });
@@ -76,6 +79,9 @@ public class UsuarioService {
         boolean proprioUsuario = existente.getUsername().equals(AuditoriaService.usuarioAtual());
         if (proprioUsuario && !usuarioAtualizado.getRole().equals(existente.getRole())) {
             throw new IllegalStateException("Você não pode alterar o próprio perfil.");
+        }
+        if (!Perfil.ADMIN.name().equals(usuarioAtualizado.getRole()) && ehUltimoAdmin(existente)) {
+            throw new IllegalStateException("Não é possível rebaixar o último administrador do sistema.");
         }
         if (!existente.getUsername().equals(usuarioAtualizado.getUsername())
                 && usuarioRepository.findByUsername(usuarioAtualizado.getUsername()).isPresent()) {
@@ -103,6 +109,11 @@ public class UsuarioService {
         if (Arrays.stream(Perfil.values()).noneMatch(p -> p.name().equals(usuario.getRole()))) {
             throw new IllegalArgumentException("Perfil inválido. Use ADMIN, GERENTE ou ATENDENTE.");
         }
+    }
+
+    private boolean ehUltimoAdmin(Usuario usuario) {
+        return Perfil.ADMIN.name().equals(usuario.getRole())
+                && usuarioRepository.countByRole(Perfil.ADMIN.name()) <= 1;
     }
 
     // Nunca inclui a senha (nem o hash) na auditoria
