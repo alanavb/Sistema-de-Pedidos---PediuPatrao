@@ -1,6 +1,11 @@
-# SIstema PediuPatrão  — Controle de acesso, pedidos e auditoria
+# Sistema PediuPatrão  — Controle de acesso, pedidos e auditoria
 
-Sistema de pedidos da pizzaria (Java 21, Spring Boot 3.4, Spring Security, MongoDB, Thymeleaf), evoluído para a Atividade Prática M1 – Parte 2.
+Sistema de pedidos da pizzaria (Java 21, Spring Boot 3.4, Spring Security, MongoDB, Thymeleaf), evoluído para a Atividade Prática M1.
+
+- **Parte 1:** perfis de acesso, regras de pedidos, descontos, cancelamentos e auditoria (seções abaixo).
+- **Parte 2:** dashboard administrativo com API própria. Documentação completa (requisitos funcionais e não funcionais, decisões de projeto, endpoints e evidências de testes) em [docs/documentacao-dashboard.md](docs/documentacao-dashboard.md).
+
+![Dashboard administrativo](docs/img/dashboard-geral.png)
 
 ## Como executar
 
@@ -8,7 +13,7 @@ Requisitos: JDK 21, Maven (ou `mvnw`) e um MongoDB. Por padrão a aplicação us
 
 ```bash
 ./mvnw spring-boot:run     # sobe em http://localhost:8080
-./mvnw test                # testes das regras de pedidos
+./mvnw test                # testes automatizados
 ```
 
 ### Dados de demonstração (dashboard)
@@ -38,7 +43,7 @@ Os testes de `TransacaoAuditoriaTest` simulam falha na gravação da auditoria e
 Na primeira execução são criados (se não existirem) três usuários de demonstração. 
 
 | Usuário | Senha | Perfil |
-
+|---|---|---|
 | admin | teste123 | ADMIN |
 | gerente | gerente123 | GERENTE |
 | atendente | atendente123 | ATENDENTE |
@@ -53,7 +58,7 @@ Na primeira execução são criados (se não existirem) três usuários de demon
 - Usuários: `/usuarios/**` e `/api/usuarios/**` só para ADMIN (a rota `/api/usuarios` antes era pública). O perfil é validado contra o enum, ninguém altera o **próprio** perfil nem exclui a si mesmo (impede autoelevação), username é único e a senha nunca é devolvida pela API (`@JsonProperty(WRITE_ONLY)`).
 
 | Operação | ADMIN | GERENTE | ATENDENTE |
-
+|---|:---:|:---:|:---:|
 | Gerenciar usuários/perfis | ✔ | | |
 | Consultar pedidos | ✔ | ✔ | ✔ |
 | Registrar pedido | | ✔ | ✔ |
@@ -63,6 +68,7 @@ Na primeira execução são criados (se não existirem) três usuários de demon
 | Cadastrar/atualizar clientes | | | ✔ |
 | Excluir cliente | | ✔ | |
 | Consultar auditoria | ✔ | ✔ | |
+| Dashboard administrativo | ✔ | ✔ | |
 
 Decisões onde o enunciado era omisso: avançar o status foi atribuído ao GERENTE ("gerenciar pedidos"); a exclusão de clientes (já existente) ficou com o GERENTE e é auditada; produtos: leitura para todos, escrita para ADMIN e GERENTE.
 
@@ -80,9 +86,27 @@ Decisões onde o enunciado era omisso: avançar o status foi atribuído ao GEREN
 - Coleção `auditoria` (`AuditoriaEvento`): usuário, perfil, data/hora, operação, entidade + id, lista de `{campo, valorAnterior, valorNovo}` e justificativa.
 - Gerada em `AuditoriaService.registrar` a partir do diff entre estado anterior e posterior. Auditados: criação de pedido, mudança de status, desconto, cancelamento, criação/alteração/exclusão de cliente (inclui logradouro, telefone etc.) e criação/alteração/exclusão de usuário (só username e perfil — **senhas nunca entram na auditoria**).
 - Consulta em `/auditoria` e `GET /api/auditoria` (ADMIN e GERENTE). `AuditoriaRepository` estende apenas `Repository` (sem update/delete) e não existe endpoint de escrita; outros métodos HTTP em `/api/auditoria` são negados.
-- Dados pessoais (telefone/endereço) aparecem na auditoria porque são o objeto do registro, mas só para ADMIN e GERENTE.
+- Dados pessoais do cliente são gravados mascarados (`MascaraDados`): telefone `(**) *****-4321`, nome `Maria A. S.`, CEP `08780-***`, número e complemento ocultos. A comparação usa os valores reais, então uma troca de telefone continua gerando registro.
+- A operação e o seu registro de auditoria são gravados na mesma transação do MongoDB: se a auditoria falhar, a operação é desfeita.
+- Não é possível excluir nem rebaixar o último administrador do sistema.
+
+## Parte 2 — Dashboard administrativo
+
+Menu **Dashboard** (ADMIN e GERENTE). Indicadores de vendas com comparação ao período anterior, gráficos de vendas no tempo, por tipo de produto e por horário, situação dos pedidos, ranking de produtos e filtros por período, status, tipo, produto e horário. Clicar em um gráfico, numa linha de status ou no ranking filtra o painel inteiro.
+
+| Endpoint (`GET`) | Conteúdo |
+|---|---|
+| `/api/dashboard/resumo` | Indicadores gerais |
+| `/api/dashboard/vendas?agrupamento=DIA\|SEMANA\|MES` | Vendas no tempo |
+| `/api/dashboard/vendas-por-hora` | Pedidos por horário de entrada |
+| `/api/dashboard/vendas-por-tipo` | Faturamento por tipo de produto |
+| `/api/dashboard/situacao-pedidos` | Pedidos por status e tempo médio até a saída |
+| `/api/dashboard/produtos-mais-vendidos?limite=10&criterio=QUANTIDADE\|FATURAMENTO` | Ranking de produtos |
+| `/api/dashboard/filtros` | Opções para montar os filtros |
+
+Parâmetros, exemplos de requisição e resposta e erros de cada endpoint: [docs/documentacao-dashboard.md](docs/documentacao-dashboard.md#7-documentação-da-api). Relatório dos testes: [docs/evidencias/relatorio-testes.md](docs/evidencias/relatorio-testes.md).
 
 ## Principais arquivos alterados/criados
 `config/SecurityConfig`, `config/DataInitializer`, `service/{PedidoService,ClienteService,UsuarioService,UsuarioDetailsService,AuditoriaService}`, `entity/{Pedido,ItemPedido,StatusPedido,Perfil,AuditoriaEvento,Alteracao}`, `controller/{PedidoController,AuditoriaController,ApiExceptionHandler,UsuarioController,HomeController}`, templates `layout`, `pedidos`, `auditoria`, `usuarios/*`, `fragments/sidebar`, e o teste `PedidoServiceTest`.
 
-
+Parte 2: `controller/DashboardController`, `service/DashboardService`, `dto/dashboard/*`, `config/{DadosDemonstracao,GeradorPedidosDemonstracao,MongoInitConfig}`, template `dashboard`, e os testes em `src/test` (`Dashboard*Test`, `FiltroDashboardTest`, `GeradorPedidosDemonstracaoTest`).

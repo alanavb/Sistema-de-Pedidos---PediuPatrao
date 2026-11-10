@@ -220,7 +220,8 @@ class AutorizacaoApiTest {
     @Test
     void requisicaoSemTokenCsrfERecusada() throws Exception {
         mvc.perform(post("/api/pedidos/p1/desconto").param("percentual", "10").with(perfil("GERENTE")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                .andExpect(content().string(containsString("Token CSRF ausente ou inválido")));
     }
 
     @Test
